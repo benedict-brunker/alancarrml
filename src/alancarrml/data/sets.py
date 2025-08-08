@@ -36,7 +36,17 @@ def pop_target(df, target_col):
     return X, y 
 
 # save_sets
-def save_sets(X_train=None, y_train=None, X_val=None, y_val=None, X_test=None, y_test=None, save_dir=None, filenames=[], save_as='numpy'): 
+def save_sets(
+        X_train=None, 
+        y_train=None, 
+        X_val=None, 
+        y_val=None, 
+        X_test=None, 
+        y_test=None, 
+        save_dir=None, 
+        filenames=[], 
+        save_as='numpy'
+        ): 
     """
     Saves datasets to path with numpy if they exist. 
 
@@ -69,6 +79,8 @@ def save_sets(X_train=None, y_train=None, X_val=None, y_val=None, X_test=None, y
     # default save path if none given  
     if save_dir is None: 
         save_dir = os.path.join(os.path.dirname(os.getcwd()), 'data', 'processed') 
+        if not os.path.exists(save_dir): 
+            os.makedirs(save_dir, exist_ok=True)
     
     # Acceptable types dict {'object': 'ext'} 
     acceptable_types = {
@@ -101,6 +113,100 @@ def save_sets(X_train=None, y_train=None, X_val=None, y_val=None, X_test=None, y
         i = save_set(y_test, "y_test", acceptable_types, i, filenames, save_dir) 
     
     return 
+
+
+    # -- Helper functions for save_sets --  
+
+# Helper function that wraps class and filename inference, and saves 
+def save_set(dataset, pattern, acceptable_types, increment, filenames, save_dir): 
+    # infer type 
+    dataset_type = infer_class(dataset) 
+    if isinstance(dataset_type, str):  
+        if filenames:
+            dataset_filename = infer_filename(filenames, pattern, increment)
+            # update the increment 
+            increment += 1 
+        else: 
+            dataset_filename = pattern + acceptable_types.get(dataset_type) 
+        
+        save_type(dataset, dataset_type, save_dir, dataset_filename)
+    # return the increment 
+    return increment 
+
+
+# Helper function to infer object type and whether allowable 
+def infer_class(dataset): 
+    acceptable_types = ['ndarray', 'sparse', 'DataFrame', 'series', 'list', 'dict']
+    set_type = type(dataset) 
+    # split at ' and take object 1 
+    clean_set_type = set_type.split('\'')[1] 
+    # split at . 
+    classes = clean_set_type.split(".") 
+    # check if object type in list of acceptable_types 
+    for a in acceptable_types: 
+        if a in classes: 
+            return a 
+    else:
+        # datatype not acceptable, return False 
+        raise ValueError(f""" 
+            Object of type {set_type} not permissible. 
+            Acceptable object types are: 
+                - np.ndarray
+                - scipy.sparse matrix 
+                - pd.DataFrame 
+                - pd.Series 
+                - list 
+                - dict 
+                         """)  
+
+# Helper function that saves depending on object type 
+def save_type(dataset, object_type, path, filename): 
+
+    if filename: 
+        path = os.path.join(path, filename) 
+
+    if object_type == 'ndarray': 
+        np.save(path, dataset) 
+        return True if os.path.isfile(path) else False
+
+    elif object_type == 'sparse': 
+        sparse.save_npz(path, dataset)  
+        return True if os.path.isfile(path) else False
+
+    elif object_type in ['DataFrame', 'series']: 
+        # add .csv extension to path if not there already 
+        if path.split(".")[-1] != 'csv': 
+            path = path + ".csv" 
+        dataset.to_csv(path)  
+        return True if os.path.isfile(path) else False
+
+    elif object_type == 'list': 
+        dataset_np = np.array(dataset) 
+        np.save(path, dataset) 
+        return True if os.path.isfile(path) else False 
+    
+    elif object_type == 'dict': 
+        # add .json extension if needed 
+        if path.split(".")[-1] != 'json': 
+            path = path + ".json" 
+        with open(path, 'w') as j:
+            json.dump(dataset, j) 
+        return True if os.path.isfile(path) else False
+    
+    
+# Helper to infer correct filename 
+def infer_filename(filenames, pattern, i): 
+
+    for f in filenames: 
+        if f.lower().split().contains(pattern): 
+            return f 
+    # if none found, select the first object and alert the user 
+    else: 
+        print(f"""
+                Filename for X_train could not be inferred, defaulted to {filenames[i]}. 
+                To save under a different name, run this function again and pass a name similar to 'x_train' to the filenames argument.
+            """) 
+        return filenames[i]
 
 # load_sets
 def load_sets(load_dir=None): 
@@ -307,10 +413,10 @@ def split_sets(df:pd.DataFrame, target_col='', time_col='', format=None, errors=
         print(f"""
               Valid argument given for val_ratio of {val_ratio} but test_ratio was {test_ratio}. 
               val_ratio will be treated as test_ratio, so return values will look like: 
-              \{'X_train': pd.DataFrame, 
+              {{'X_train': pd.DataFrame, 
                 'X_test': pd.DataFrame, 
                 etc.    
-              }
+              }} 
               """)
     
     
@@ -401,10 +507,10 @@ def split_sets(df:pd.DataFrame, target_col='', time_col='', format=None, errors=
         print(f""" 
                 test_ratio was {test_ratio} and val_ratio was {val_ratio}. 
                 Original df will be split between features and target as: 
-                \{
+                {{
                     'X': features,
                     'y': target
-                }
+                }}
               """)
         return {
             'X': X, 
@@ -415,9 +521,9 @@ def split_sets(df:pd.DataFrame, target_col='', time_col='', format=None, errors=
         print(f""" 
                 test_ratio was {test_ratio} and val_ratio was {val_ratio}. 
                 Original df will be returned unchanged as: 
-                \{
+                {{
                     'df': df
-                }
+                }}
               """)
         return {
             'df': df 
@@ -475,12 +581,6 @@ def split_sets_random(features, target, test_ratio):
     train_idx = np.array([idx for idx in data_idx if idx not in val_idx])
     # assert that val_idx and test_idx are of the same size 
     assert len(val_idx) == len(test_idx), f"Dev error: val_idx and test_idx were of unequal lengths: {len(val_idx)} != {len(test_idx)}" 
-    # assert that val_idx and test_idx have no overlapping indices 
-    assert all(val_idx != test_idx), f"Dev error: val_idx and test_idx have overlapping indices: {np.where(val_idx == test_idx)}"  
-    # assert that train_idx and val_idx have no overlapping indices 
-    assert all(train_idx != val_idx), f"Dev error: train_idx and val_idx have overlapping indices: {np.where(train_idx == val_idx)}" 
-    # assert that train_idx and test_idx have no overlapping indices 
-    assert all(train_idx != test_idx), f"Dev error: train_idx and test_idx have overlapping indices: {np.where(train_idx == test_idx)}"
 
     # Split sets according to randomized indices 
     X_train = features.loc[train_idx].copy() 
@@ -518,95 +618,7 @@ def load_set(path, ext):
     else:
         return False
 
-# Helper function that wraps class and filename inference, and saves 
-def save_set(dataset, pattern, acceptable_types, increment, filenames, save_dir): 
-    # infer type 
-    dataset_type = infer_class(dataset) 
-    if isinstance(dataset_type, str):  
-        if filenames:
-            dataset_filename = infer_filename(filenames, pattern, increment)
-            # update the increment 
-            increment += 1 
-        else: 
-            dataset_filename = pattern + acceptable_types.get(dataset_type) 
-        
-        save_type(dataset, dataset_type, save_dir, dataset_filename)
-    # return the increment 
-    return increment 
 
-
-# Helper function to infer object type and whether allowable 
-def infer_class(dataset): 
-    acceptable_types = ['ndarray', 'sparse', 'DataFrame', 'series', 'list', 'dict']
-    set_type = type(dataset) 
-    # split at ' and take object 1 
-    clean_set_type = set_type.split('\'')[1] 
-    # split at . 
-    classes = clean_set_type.split(".") 
-    # check if object type in list of acceptable_types 
-    for a in acceptable_types: 
-        if a in classes: 
-            return a 
-    else:
-        # datatype not acceptable, return False 
-        raise ValueError(f""" 
-            Object of type {set_type} not permissible. 
-            Acceptable object types are: 
-                - np.ndarray
-                - scipy.sparse matrix 
-                - pd.DataFrame 
-                - pd.Series 
-                - list 
-                - dict 
-                         """)  
-
-# Helper function that saves depending on object type 
-def save_type(dataset, object_type, path, filename): 
-
-    if filename: 
-        path = os.path.join(path, filename) 
-
-    if object_type == 'ndarray': 
-        np.save(path, dataset) 
-        return True if os.path.isfile(path) else False
-
-    elif object_type == 'sparse': 
-        sparse.save_npz(path, dataset)  
-        return True if os.path.isfile(path) else False
-
-    elif object_type in ['DataFrame', 'series']: 
-        # add .csv extension to path if not there already 
-        if path.split(".")[-1] != 'csv': 
-            path = path + ".csv" 
-        dataset.to_csv(path)  
-        return True if os.path.isfile(path) else False
-
-    elif object_type == 'list': 
-        dataset_np = np.array(dataset) 
-        np.save(path, dataset) 
-        return True if os.path.isfile(path) else False 
-    
-    elif object_type == 'dict': 
-        # add .json extension if needed 
-        if path.split(".")[-1] != 'json': 
-            path = path + ".json" 
-        with open(path, 'w') as j:
-            json.dump(dataset, j) 
-        return True if os.path.isfile(path) else False
-    
-# Helper to infer correct filename 
-def infer_filename(filenames, pattern, i): 
-
-    for f in filenames: 
-        if f.lower().split().contains(pattern): 
-            return f 
-    # if none found, select the first object and alert the user 
-    else: 
-        print(f"""
-                Filename for X_train could not be inferred, defaulted to {filenames[i]}. 
-                To save under a different name, run this function again and pass a name similar to 'x_train' to the filenames argument.
-            """) 
-        return filenames[i]
     
 # validate correct inputs 
 def validate_input(obj, valid_classes: str | tuple, param_name: str, error=TypeError, error_message=''): 
