@@ -137,7 +137,7 @@ def save_set(dataset, pattern, acceptable_types, increment, filenames, save_dir)
 # Helper function to infer object type and whether allowable 
 def infer_class(dataset): 
     acceptable_types = ['ndarray', 'sparse', 'DataFrame', 'series', 'list', 'dict']
-    set_type = type(dataset) 
+    set_type = str(type(dataset))
     # split at ' and take object 1 
     clean_set_type = set_type.split('\'')[1] 
     # split at . 

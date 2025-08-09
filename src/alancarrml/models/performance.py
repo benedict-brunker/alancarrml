@@ -24,11 +24,14 @@ def score_regressors(y_preds, y_actuals, set_name):
     r2 = r2_score(y_actuals, y_preds) 
 
     # Print scores 
-    print(f"Scores for {set_name}: ") 
-    print(f"\n      Root Mean Squared Error: {rmse}") 
-    print(f"        Mean Squared Error: {mse}")  
-    print(f"        Mean Absolute Error: {mae}") 
-    print(f"        R2 Score: {r2}") 
+    print(f"                Scores for {set_name}") 
+    print("-" * 60)
+    print(f"        Root Mean Squared Error    |   {rmse:.4f}") 
+    print(f"        Mean Squared Error         |   {mse:.4f}")  
+    print(f"        Mean Absolute Error        |   {mae:.4f}") 
+    print(f"        R2 Score                   |   {r2:.4f}") 
+    print("-" * 60) 
+    print() 
 
     # Return scores 
     return {
