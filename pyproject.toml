@@ -5,7 +5,7 @@ description = "Machine Learning sweeties, the easy way!"
 authors = ["Benedict Brunker"]
 license = "None"
 readme = "README.md"
-packages = [{include = "alancarrml", from = "alancarrml-project/src"}] 
+packages = [{include = "alancarrml", from = "src"}] 
 
 [tool.poetry.dependencies]
 python = "^3.11.4"

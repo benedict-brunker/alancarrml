@@ -95,19 +95,19 @@ def save_sets(
     i = 0 # counter for tracking position in the filenames list 
 
     if X_train is not None: 
-        i = save_set(X_train, "x_train", acceptable_types, i, filenames, save_dir) 
+        i = save_set(X_train, "X_train", acceptable_types, i, filenames, save_dir) 
     
     if y_train is not None: 
         i = save_set(y_train, "y_train", acceptable_types, i, filenames, save_dir) 
 
     if X_val is not None: 
-        i = save_set(X_val, "x_val", acceptable_types, i, filenames, save_dir) 
+        i = save_set(X_val, "X_val", acceptable_types, i, filenames, save_dir) 
     
     if y_val is not None: 
         i = save_set(y_val, "y_val", acceptable_types, i, filenames, save_dir) 
     
     if X_test is not None: 
-        i = save_set(X_test, "x_test", acceptable_types, i, filenames, save_dir) 
+        i = save_set(X_test, "X_test", acceptable_types, i, filenames, save_dir) 
     
     if y_test is not None: 
         i = save_set(y_test, "y_test", acceptable_types, i, filenames, save_dir) 
@@ -209,7 +209,7 @@ def infer_filename(filenames, pattern, i):
         return filenames[i]
 
 # load_sets
-def load_sets(load_dir=None): 
+def load_sets(load_dir=None, return_dict=True): 
     """
     Loads locally saved sets if they exist. 
 
@@ -217,11 +217,16 @@ def load_sets(load_dir=None):
     __________________________________________________________________________________________________
     load_dir: string | pathlike 
         Path to directory from which to load sets. If None will default to '../data/processed/' 
-    
+    return_dict: bool 
+        If True, returns labelled dict of loaded objects, with keys identifying objects. 
+        If False, returns objects directly in the order: X_train, X_val, X_test, y_train, y_val, y_test
+
     Returns 
     __________________________________________________________________________________________________
     datasets: dict 
-        All dataset objects in load_dir, packaged as a dict for consistency, formatted as {'filename': dataset} 
+        All dataset objects in load_dir, packaged as a dict for consistency, formatted as {'filename': dataset}  
+    OR 
+    X_train, X_val, X_test, y_train, y_val, y_test 
     """
     # construct default path if None given 
     if load_dir is None: 
@@ -237,8 +242,10 @@ def load_sets(load_dir=None):
             break 
     
     # list and count contents of directory 
-    pathnames = os.listdir(load_dir) 
-    if not pathnames: 
+    filenames = os.listdir(load_dir) 
+    # print(f"Pathnames in {load_dir}: ", pathnames) # DEBUGGING 
+    if not filenames: 
+        # print("Pathnames variable empty.")   # DEBUGGING 
         raise FileNotFoundError(f"""
               Directory {load_dir} did not contain any files to load.
               """)
@@ -247,24 +254,63 @@ def load_sets(load_dir=None):
     datasets = {} 
     n_files = 0 # counts number of valid files
     valid_extensions = ['csv', 'npy', 'npz', 'json']
-    for p in pathnames: 
-        extension = p.split(".")[-1]
-        if (os.path.isfile(p)) and (extension in valid_extensions):
-            full_path = os.path.join(load_dir, p) 
-            datasets[p] = load_set(full_path, extension) 
+    for f in filenames:  
+        extension = f.split(".")[-1]    #  get the file's extension
+        prefix = f.split(".")[0]        #  get the name of the variable 
+        full_path = os.path.join(load_dir, f)  # construct absolute path to file
+        if (os.path.isfile(full_path)) and (extension in valid_extensions): # check that the full path is valid and extension is valid
+            dataset = load_set(full_path, extension)
+            if dataset is None:
+                raise ValueError(f"Dataset {prefix} loaded from {full_path} was of type {type(dataset)}") 
+            datasets[prefix] = dataset 
             n_files += 1 
 
     if n_files < 1: 
+        # print("Value of n_files variable: ", n_files) # DEBUGGING 
         raise FileNotFoundError(f"""
                 Directory {load_dir} did not contain any files to load.
                                 """)
     
     if datasets:
-        return datasets 
+        if return_dict:
+            return datasets 
+        else:
+            return datasets.get('X_train'), datasets.get('X_val'), datasets.get('X_test'), datasets.get('y_train'), datasets.get('y_val'), datasets.get('y_test') 
     else:
         raise FileNotFoundError(f"""
                                 No files were successfully loaded from {load_dir} 
                                 """)
+
+
+# Helper for loading object based on extension type 
+def load_set(path, ext): 
+    if ext == 'csv': 
+        df = pd.read_csv(path) 
+        if df.empty or df is None:
+            raise ValueError(f"DataFrame loaded from {path} was {type(df)}")
+        else:
+            return df 
+    elif ext == 'npy': 
+        ndarray = np.load(path)  
+        if ndarray: 
+            return ndarray
+        else:
+            raise ValueError(f"ndarray loaded from {path} was {type(ndarray)}")
+    elif ext == 'npz': 
+        spmat = sparse.load_npz(path) 
+        if spmat: 
+            return spmat 
+        else:
+            raise ValueError(f"Scipy matrix loaded from {path} was {type(spmat)}")
+    elif ext == 'json': 
+        with open(path, 'r') as f: 
+            dictionary = json.load(f)  
+        if dictionary:
+            return dictionary 
+        else:
+            raise ValueError(f"JSON/Dict object loaded from {path} was {type(dictionary)}")
+    else:
+        return False
 
 
 # subset
@@ -604,20 +650,6 @@ def split_sets_random(features, target, test_ratio):
 
 # ===  HELPER FUNCTIONS === 
 
-# Helper for loading object based on extension type 
-def load_set(path, ext): 
-    if ext == 'csv': 
-        return pd.load_csv(path) 
-    elif ext == 'npy': 
-        return np.load(path) 
-    elif ext == 'npz': 
-        return sparse.load_npz(path) 
-    elif ext == 'json': 
-        with open(path, 'r') as f: 
-            return json.load(f) 
-    else:
-        return False
-
 
     
 # validate correct inputs 
@@ -650,4 +682,72 @@ def validate_input(obj, valid_classes: str | tuple, param_name: str, error=TypeE
     if not isinstance(obj, valid_classes): 
         raise error(error_message) 
     else:
-        return True 
+        return True  
+    
+
+def verify_datasets(dataset_names=['X_train', 'X_val', 'X_test', 'y_train', 'y_val', 'y_test']): 
+    """
+    Prints type and shape of all datasets if they exist as global variables. 
+
+    Parameters
+    ______________________________________________________________________________________________
+    dataset_names: list[str] 
+        Names of dataset variables. Defaults to standard naming conventions. 
+
+    Returns
+    ______________________________________________________________________________________________
+    None 
+    """
+    global_vars = globals() 
+
+    if 'X_train' in global_vars: 
+        type_string, dim_string = verify_dataset(global_vars, 'X_train')
+        print_info('X_train', type_string, dim_string)
+        
+    elif 'x_train' in global_vars:
+        type_string, dim_string = verify_dataset(global_vars, 'x_train')
+        print_info('x_train', type_string, dim_string) 
+
+    if 'X_val' in global_vars:
+        type_string, dim_string = verify_dataset(global_vars, 'X_val')
+        print_info('X_val', type_string, dim_string) 
+
+    elif 'x_val' in global_vars:
+        type_string, dim_string = verify_dataset(global_vars, 'x_val')
+        print_info('x_val', type_string, dim_string)
+
+    if 'X_test' in global_vars: 
+        type_string, dim_string = verify_dataset(global_vars, 'X_test')
+        print_info('X_test', type_string, dim_string) 
+
+    elif 'x_test' in global_vars: 
+        type_string, dim_string = verify_dataset(global_vars, 'x_test')
+        print_info('x_test', type_string, dim_string)
+    
+    if 'y_train' in global_vars: 
+        type_string, dim_string = verify_dataset(global_vars, 'y_train')
+        print_info('y_train', type_string, dim_string)
+    
+    if 'y_val' in global_vars: 
+        type_string, dim_string = verify_dataset(global_vars, 'y_val')
+        print_info('y_val', type_string, dim_string)
+    
+    if 'y_test' in global_vars: 
+        type_string, dim_string = verify_dataset(global_vars, 'y_test')
+        print_info('y_test', type_string, dim_string) 
+
+
+# -- Helpers -- 
+
+def verify_dataset(global_vars, dataset_name): 
+    if dataset_name in global_vars: 
+        dataset = global_vars.get(dataset_name) 
+        try: 
+            return f"Type: {type(dataset)}", f"Dimensions: {dataset.shape}"
+        except AttributeError: 
+            return f"Type: {type(dataset)}", f"Length: {len(dataset)}"
+
+def print_info(dataset_name, type_string, dim_string): 
+    print(f"{dataset_name}:") 
+    print(f"     {type_string}") 
+    print(f"     {dim_string} \n") 
